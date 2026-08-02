@@ -220,15 +220,14 @@ def fig_download_button(fig, filename, key, label="⬇️ Unduh Grafik (PNG)"):
     st.caption("Tips: gunakan ikon kamera 📷 di pojok kanan atas grafik untuk mengunduh langsung juga.")
 
 
-def render_gauge_card_png(df, specs, card_title=None, dpi=200):
-    """Gambar kartu berisi beberapa gauge (rata-rata nasional) sebagai satu PNG utuh
-    memakai matplotlib. Tidak bergantung pada kaleido/Chrome sehingga tombol unduh PNG
-    selalu berfungsi di server manapun (mis. Streamlit Community Cloud)."""
+def render_metric_card_png(df, specs, dpi=200):
+    """Gambar kartu KPI datar (bukan speedometer) untuk beberapa metrik rata-rata nasional
+    sebagai satu PNG utuh memakai matplotlib. Setiap kartu berisi: label, nilai besar, dan
+    mini progress bar yang menunjukkan posisi rata-rata terhadap rentang min-maks provinsi.
+    Tidak bergantung pada kaleido/Chrome sehingga tombol unduh PNG selalu berfungsi."""
     n = len(specs)
-    fig, axes = plt.subplots(1, n, figsize=(3.9 * n, 3.6))
-    fig.patch.set_facecolor("#f7f9f8")
-    fig.patch.set_edgecolor("#dbe2df")
-    fig.patch.set_linewidth(2.5)
+    fig, axes = plt.subplots(1, n, figsize=(3.7 * n, 2.1))
+    fig.patch.set_facecolor("white")
     if n == 1:
         axes = [axes]
 
@@ -240,49 +239,44 @@ def render_gauge_card_png(df, specs, card_title=None, dpi=200):
             vmax = vmin + 1
         frac = max(0.0, min(1.0, (val - vmin) / (vmax - vmin)))
 
-        ax.set_facecolor("#f7f9f8")
-        ax.set_xlim(-1.28, 1.28)
-        ax.set_ylim(-0.18, 1.28)
-        ax.set_aspect("equal")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
         ax.axis("off")
 
-        r_out, r_in = 1.0, 0.66
-        if spec.get("steps"):
-            for a, b, c in spec["steps"]:
-                th1 = 180 - (b - vmin) / (vmax - vmin) * 180
-                th2 = 180 - (a - vmin) / (vmax - vmin) * 180
-                th1, th2 = max(0, min(180, th1)), max(0, min(180, th2))
-                ax.add_patch(mpatches.Wedge((0, 0), r_out, th1, th2, width=r_out - r_in,
-                                             facecolor=c, edgecolor="none"))
-        else:
-            ax.add_patch(mpatches.Wedge((0, 0), r_out, 0, 180, width=r_out - r_in,
-                                         facecolor="#e3e8e6", edgecolor="none"))
+        card = mpatches.FancyBboxPatch(
+            (0.025, 0.06), 0.95, 0.88,
+            boxstyle="round,pad=0,rounding_size=0.09",
+            linewidth=1.3, edgecolor="#e3e8e6", facecolor="#f7f9f8",
+            transform=ax.transAxes, zorder=1,
+        )
+        ax.add_patch(card)
 
-        r_out2, r_in2 = 0.92, 0.78
-        val_theta = 180 - frac * 180
-        if frac > 0.004:
-            ax.add_patch(mpatches.Wedge((0, 0), r_out2, val_theta, 180, width=r_out2 - r_in2,
-                                         facecolor=spec["bar_color"], edgecolor="none"))
-        # penanda jarum di posisi nilai
-        ax.add_patch(mpatches.Wedge((0, 0), r_out2 + 0.02, val_theta - 1.0, val_theta + 1.0,
-                                     width=(r_out2 - r_in2) + 0.06, facecolor="#1f3d33", edgecolor="none"))
+        ax.add_patch(mpatches.Circle((0.10, 0.72), 0.028, facecolor=spec["bar_color"],
+                                      edgecolor="none", transform=ax.transAxes, zorder=2))
+        ax.text(0.155, 0.72, spec["label"], fontsize=11.5, fontweight="bold",
+                color=spec["bar_color"], va="center", ha="left", transform=ax.transAxes, zorder=2)
 
-        ax.text(-r_out - 0.03, -0.03, format(vmin, spec["valueformat"]), ha="right", va="top",
-                fontsize=9.5, color="#5b6b65")
-        ax.text(r_out + 0.03, -0.03, format(vmax, spec["valueformat"]), ha="left", va="top",
-                fontsize=9.5, color="#5b6b65")
+        ax.text(0.09, 0.46, f"{format(val, spec['valueformat'])}{spec['suffix']}",
+                fontsize=25, fontweight="bold", color="#1f3d33",
+                va="center", ha="left", transform=ax.transAxes, zorder=2)
 
-        ax.text(0, 0.30, f"{format(val, spec['valueformat'])}{spec['suffix']}", ha="center", va="center",
-                fontsize=21, fontweight="bold", color="#1f3d33")
-        ax.text(0, 1.16, spec["label"], ha="center", va="center", fontsize=12.5, fontweight="bold",
-                color="#1f3d33")
+        # mini progress bar (bukan speedometer) menunjukkan posisi rata-rata nasional
+        bar_x0, bar_w, bar_y, bar_h = 0.09, 0.82, 0.20, 0.05
+        ax.add_patch(mpatches.FancyBboxPatch((bar_x0, bar_y), bar_w, bar_h,
+                     boxstyle="round,pad=0,rounding_size=0.02", linewidth=0,
+                     facecolor="#e3e8e6", transform=ax.transAxes, zorder=2))
+        ax.add_patch(mpatches.FancyBboxPatch((bar_x0, bar_y), bar_w * max(frac, 0.02), bar_h,
+                     boxstyle="round,pad=0,rounding_size=0.02", linewidth=0,
+                     facecolor=spec["bar_color"], transform=ax.transAxes, zorder=3))
 
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.86 if card_title else 0.96, bottom=0.04, wspace=0.12)
-    if card_title:
-        fig.suptitle(card_title, fontsize=15, fontweight="bold", color="#1f3d33", y=0.98)
+        ax.text(bar_x0, 0.11, format(vmin, spec["valueformat"]), fontsize=8.5, color="#8a9a94",
+                va="center", ha="left", transform=ax.transAxes, zorder=2)
+        ax.text(bar_x0 + bar_w, 0.11, format(vmax, spec["valueformat"]), fontsize=8.5, color="#8a9a94",
+                va="center", ha="right", transform=ax.transAxes, zorder=2)
 
+    fig.subplots_adjust(left=0.005, right=0.995, top=0.98, bottom=0.02, wspace=0.06)
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=dpi, facecolor=fig.get_facecolor())
+    fig.savefig(buf, format="png", dpi=dpi, facecolor="white")
     plt.close(fig)
     buf.seek(0)
     return buf.getvalue()
@@ -466,27 +460,25 @@ elif page == "☣️ Limbah B3 per Sektor":
 elif page == "📦 Timbulan Sampah Provinsi":
     st.title("📦 Timbulan & Pengelolaan Sampah per Provinsi")
 
-    # -------------------- SECTION: ANGKA NASIONAL (VISUALISASI GAUGE) --------------------
+    # -------------------- SECTION: ANGKA NASIONAL (KARTU KPI) --------------------
     st.subheader("🇮🇩 Angka Nasional (Rata-rata Semua Provinsi)")
     st.caption(
         "Posisi rata-rata nasional dibandingkan rentang (nilai terendah–tertinggi) seluruh 38 provinsi. "
-        "Jarum menunjukkan nilai rata-rata; angka di bawahnya menunjukkan skala minimum dan maksimum provinsi."
+        "Bar tipis di bawah nilai menunjukkan posisi rata-rata; angka di ujungnya adalah skala minimum dan maksimum provinsi."
     )
 
-    gauge_specs = [
+    metric_specs = [
         {
             "label": "Timbulan Sampah Tahunan",
             "col": "Timbulan Sampah Tahunan (ton/tahun)",
             "suffix": "", "valueformat": ",.0f",
             "bar_color": "#2E86AB",
-            "steps": None,  # skala terlalu lebar untuk pewarnaan zona tetap, biarkan netral
         },
         {
             "label": "Pengurangan Sampah",
             "col": "Pengurangan Sampah (%)",
             "suffix": "%", "valueformat": ".1f",
             "bar_color": "#8E44AD",
-            "steps": [(0, 33, "#fdecea"), (33, 66, "#fff8e1"), (66, 100, "#e8f5e9")],
             "fixed_range": (0, 100),
         },
         {
@@ -494,7 +486,6 @@ elif page == "📦 Timbulan Sampah Provinsi":
             "col": "Penanganan Sampah (%)",
             "suffix": "%", "valueformat": ".1f",
             "bar_color": "#16A085",
-            "steps": [(0, 33, "#fdecea"), (33, 66, "#fff8e1"), (66, 100, "#e8f5e9")],
             "fixed_range": (0, 100),
         },
         {
@@ -502,16 +493,15 @@ elif page == "📦 Timbulan Sampah Provinsi":
             "col": "Sampah Terkelola (%)",
             "suffix": "%", "valueformat": ".1f",
             "bar_color": "#27AE60",
-            "steps": [(0, 33, "#fdecea"), (33, 66, "#fff8e1"), (66, 100, "#e8f5e9")],
             "fixed_range": (0, 100),
         },
     ]
 
-    gauge_card_png = render_gauge_card_png(df_234, gauge_specs)
-    st.image(gauge_card_png, use_container_width=True)
+    metric_card_png = render_metric_card_png(df_234, metric_specs)
+    st.image(metric_card_png, use_container_width=True)
     st.download_button(
         label="⬇️ Unduh Kartu Angka Nasional (PNG)",
-        data=gauge_card_png,
+        data=metric_card_png,
         file_name="kartu_angka_nasional_234.png",
         mime="image/png",
         key="dl_234_gauge_card",
