@@ -31,6 +31,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 from embedded_data import EMBEDDED_FILES  # data Excel sudah tertanam otomatis di sini
 
@@ -214,6 +218,74 @@ def fig_download_button(fig, filename, key, label="⬇️ Unduh Grafik (PNG)"):
             use_container_width=True,
         )
     st.caption("Tips: gunakan ikon kamera 📷 di pojok kanan atas grafik untuk mengunduh langsung juga.")
+
+
+def render_gauge_card_png(df, specs, card_title=None, dpi=200):
+    """Gambar kartu berisi beberapa gauge (rata-rata nasional) sebagai satu PNG utuh
+    memakai matplotlib. Tidak bergantung pada kaleido/Chrome sehingga tombol unduh PNG
+    selalu berfungsi di server manapun (mis. Streamlit Community Cloud)."""
+    n = len(specs)
+    fig, axes = plt.subplots(1, n, figsize=(3.9 * n, 3.6))
+    fig.patch.set_facecolor("#f7f9f8")
+    fig.patch.set_edgecolor("#dbe2df")
+    fig.patch.set_linewidth(2.5)
+    if n == 1:
+        axes = [axes]
+
+    for ax, spec in zip(axes, specs):
+        col_data = df[spec["col"]]
+        val = float(col_data.mean())
+        vmin, vmax = spec.get("fixed_range", (float(col_data.min()), float(col_data.max())))
+        if vmax == vmin:
+            vmax = vmin + 1
+        frac = max(0.0, min(1.0, (val - vmin) / (vmax - vmin)))
+
+        ax.set_facecolor("#f7f9f8")
+        ax.set_xlim(-1.28, 1.28)
+        ax.set_ylim(-0.18, 1.28)
+        ax.set_aspect("equal")
+        ax.axis("off")
+
+        r_out, r_in = 1.0, 0.66
+        if spec.get("steps"):
+            for a, b, c in spec["steps"]:
+                th1 = 180 - (b - vmin) / (vmax - vmin) * 180
+                th2 = 180 - (a - vmin) / (vmax - vmin) * 180
+                th1, th2 = max(0, min(180, th1)), max(0, min(180, th2))
+                ax.add_patch(mpatches.Wedge((0, 0), r_out, th1, th2, width=r_out - r_in,
+                                             facecolor=c, edgecolor="none"))
+        else:
+            ax.add_patch(mpatches.Wedge((0, 0), r_out, 0, 180, width=r_out - r_in,
+                                         facecolor="#e3e8e6", edgecolor="none"))
+
+        r_out2, r_in2 = 0.92, 0.78
+        val_theta = 180 - frac * 180
+        if frac > 0.004:
+            ax.add_patch(mpatches.Wedge((0, 0), r_out2, val_theta, 180, width=r_out2 - r_in2,
+                                         facecolor=spec["bar_color"], edgecolor="none"))
+        # penanda jarum di posisi nilai
+        ax.add_patch(mpatches.Wedge((0, 0), r_out2 + 0.02, val_theta - 1.0, val_theta + 1.0,
+                                     width=(r_out2 - r_in2) + 0.06, facecolor="#1f3d33", edgecolor="none"))
+
+        ax.text(-r_out - 0.03, -0.03, format(vmin, spec["valueformat"]), ha="right", va="top",
+                fontsize=9.5, color="#5b6b65")
+        ax.text(r_out + 0.03, -0.03, format(vmax, spec["valueformat"]), ha="left", va="top",
+                fontsize=9.5, color="#5b6b65")
+
+        ax.text(0, 0.30, f"{format(val, spec['valueformat'])}{spec['suffix']}", ha="center", va="center",
+                fontsize=21, fontweight="bold", color="#1f3d33")
+        ax.text(0, 1.16, spec["label"], ha="center", va="center", fontsize=12.5, fontweight="bold",
+                color="#1f3d33")
+
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.86 if card_title else 0.96, bottom=0.04, wspace=0.12)
+    if card_title:
+        fig.suptitle(card_title, fontsize=15, fontweight="bold", color="#1f3d33", y=0.98)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 NASIONAL_LABEL = "🇮🇩 Nasional (Rata-rata Semua Provinsi)"
@@ -435,40 +507,16 @@ elif page == "📦 Timbulan Sampah Provinsi":
         },
     ]
 
-    fig_gauge = make_subplots(
-        rows=1, cols=4,
-        specs=[[{"type": "indicator"}] * 4],
-        horizontal_spacing=0.06,
+    gauge_card_png = render_gauge_card_png(df_234, gauge_specs)
+    st.image(gauge_card_png, use_container_width=True)
+    st.download_button(
+        label="⬇️ Unduh Kartu Angka Nasional (PNG)",
+        data=gauge_card_png,
+        file_name="kartu_angka_nasional_234.png",
+        mime="image/png",
+        key="dl_234_gauge_card",
+        use_container_width=True,
     )
-
-    for i, spec in enumerate(gauge_specs):
-        col_data = df_234[spec["col"]]
-        nasional_val = col_data.mean()
-        rng = spec.get("fixed_range", (col_data.min(), col_data.max()))
-        gauge_dict = {
-            "axis": {"range": list(rng), "tickformat": spec["valueformat"]},
-            "bar": {"color": spec["bar_color"], "thickness": 0.35},
-        }
-        if spec["steps"]:
-            gauge_dict["steps"] = [{"range": [a, b], "color": c} for a, b, c in spec["steps"]]
-        fig_gauge.add_trace(
-            go.Indicator(
-                mode="gauge+number",
-                value=nasional_val,
-                number={"suffix": spec["suffix"], "valueformat": spec["valueformat"], "font": {"size": 26}},
-                title={"text": spec["label"], "font": {"size": 14}},
-                gauge=gauge_dict,
-                domain={"row": 0, "column": i},
-            ),
-            row=1, col=i + 1,
-        )
-
-    fig_gauge.update_layout(
-        height=280, margin=dict(l=20, r=20, t=55, b=10),
-        template=TEMPLATE, paper_bgcolor="rgba(0,0,0,0)",
-    )
-    st.plotly_chart(fig_gauge, use_container_width=True)
-    fig_download_button(fig_gauge, "gauge_angka_nasional_234.png", "dl_234_gauge")
     st.caption("Dihitung dari rata-rata seluruh 38 provinsi (bukan dari total nasional).")
     st.divider()
 
