@@ -62,7 +62,7 @@ st.markdown(
     <style>
     .main > div {padding-top: 1.2rem;}
     div[data-testid="stMetric"] {
-        background-color: #f7f9f8;
+        background-color: #A0153E;
         border: 1px solid #e3e8e6;
         border-radius: 12px;
         padding: 14px 16px 8px 16px;
