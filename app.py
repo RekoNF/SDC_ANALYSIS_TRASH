@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from embedded_data import EMBEDDED_FILES  # data Excel sudah tertanam otomatis di sini
@@ -393,12 +394,81 @@ elif page == "☣️ Limbah B3 per Sektor":
 elif page == "📦 Timbulan Sampah Provinsi":
     st.title("📦 Timbulan & Pengelolaan Sampah per Provinsi")
 
+    # -------------------- SECTION: ANGKA NASIONAL (VISUALISASI GAUGE) --------------------
     st.subheader("🇮🇩 Angka Nasional (Rata-rata Semua Provinsi)")
-    n1, n2, n3, n4 = st.columns(4)
-    n1.metric("Timbulan Sampah Tahunan", f"{df_234['Timbulan Sampah Tahunan (ton/tahun)'].mean():,.0f} ton")
-    n2.metric("Pengurangan Sampah", f"{df_234['Pengurangan Sampah (%)'].mean():,.1f} %")
-    n3.metric("Penanganan Sampah", f"{df_234['Penanganan Sampah (%)'].mean():,.1f} %")
-    n4.metric("Sampah Terkelola", f"{df_234['Sampah Terkelola (%)'].mean():,.1f} %")
+    st.caption(
+        "Posisi rata-rata nasional dibandingkan rentang (nilai terendah–tertinggi) seluruh 38 provinsi. "
+        "Jarum menunjukkan nilai rata-rata; angka di bawahnya menunjukkan skala minimum dan maksimum provinsi."
+    )
+
+    gauge_specs = [
+        {
+            "label": "Timbulan Sampah Tahunan",
+            "col": "Timbulan Sampah Tahunan (ton/tahun)",
+            "suffix": "", "valueformat": ",.0f",
+            "bar_color": "#2E86AB",
+            "steps": None,  # skala terlalu lebar untuk pewarnaan zona tetap, biarkan netral
+        },
+        {
+            "label": "Pengurangan Sampah",
+            "col": "Pengurangan Sampah (%)",
+            "suffix": "%", "valueformat": ".1f",
+            "bar_color": "#8E44AD",
+            "steps": [(0, 33, "#fdecea"), (33, 66, "#fff8e1"), (66, 100, "#e8f5e9")],
+            "fixed_range": (0, 100),
+        },
+        {
+            "label": "Penanganan Sampah",
+            "col": "Penanganan Sampah (%)",
+            "suffix": "%", "valueformat": ".1f",
+            "bar_color": "#16A085",
+            "steps": [(0, 33, "#fdecea"), (33, 66, "#fff8e1"), (66, 100, "#e8f5e9")],
+            "fixed_range": (0, 100),
+        },
+        {
+            "label": "Sampah Terkelola",
+            "col": "Sampah Terkelola (%)",
+            "suffix": "%", "valueformat": ".1f",
+            "bar_color": "#27AE60",
+            "steps": [(0, 33, "#fdecea"), (33, 66, "#fff8e1"), (66, 100, "#e8f5e9")],
+            "fixed_range": (0, 100),
+        },
+    ]
+
+    fig_gauge = make_subplots(
+        rows=1, cols=4,
+        specs=[[{"type": "indicator"}] * 4],
+        horizontal_spacing=0.06,
+    )
+
+    for i, spec in enumerate(gauge_specs):
+        col_data = df_234[spec["col"]]
+        nasional_val = col_data.mean()
+        rng = spec.get("fixed_range", (col_data.min(), col_data.max()))
+        gauge_dict = {
+            "axis": {"range": list(rng), "tickformat": spec["valueformat"]},
+            "bar": {"color": spec["bar_color"], "thickness": 0.35},
+        }
+        if spec["steps"]:
+            gauge_dict["steps"] = [{"range": [a, b], "color": c} for a, b, c in spec["steps"]]
+        fig_gauge.add_trace(
+            go.Indicator(
+                mode="gauge+number",
+                value=nasional_val,
+                number={"suffix": spec["suffix"], "valueformat": spec["valueformat"], "font": {"size": 26}},
+                title={"text": spec["label"], "font": {"size": 14}},
+                gauge=gauge_dict,
+                domain={"row": 0, "column": i},
+            ),
+            row=1, col=i + 1,
+        )
+
+    fig_gauge.update_layout(
+        height=280, margin=dict(l=20, r=20, t=55, b=10),
+        template=TEMPLATE, paper_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(fig_gauge, use_container_width=True)
+    fig_download_button(fig_gauge, "gauge_angka_nasional_234.png", "dl_234_gauge")
     st.caption("Dihitung dari rata-rata seluruh 38 provinsi (bukan dari total nasional).")
     st.divider()
 
