@@ -62,10 +62,15 @@ st.markdown(
     <style>
     .main > div {padding-top: 1.2rem;}
     div[data-testid="stMetric"] {
-        background-color: #A0153E;
+        background-color: #f7f9f8;
         border: 1px solid #e3e8e6;
         border-radius: 12px;
         padding: 14px 16px 8px 16px;
+    }
+    div[data-testid="stMetric"] label,
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"],
+    div[data-testid="stMetric"] div[data-testid="stMetricLabel"] {
+        color: #1f3d33 !important;
     }
     h1, h2, h3 { color: #1f3d33; }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
@@ -208,6 +213,19 @@ def fig_download_button(fig, filename, key, label="⬇️ Unduh Grafik (PNG)"):
             use_container_width=True,
         )
     st.caption("Tips: gunakan ikon kamera 📷 di pojok kanan atas grafik untuk mengunduh langsung juga.")
+
+
+NASIONAL_LABEL = "🇮🇩 Nasional (Rata-rata Semua Provinsi)"
+
+
+def national_row(df, kategori_cols, label=NASIONAL_LABEL):
+    """Hitung rata-rata nasional (rata-rata dari semua provinsi) untuk kolom-kolom kategori
+    tertentu, dan kembalikan sebagai satu baris DataFrame agar bisa digabung (concat)
+    dengan data provinsi terpilih."""
+    means = df[kategori_cols].mean(numeric_only=True)
+    row = {"Provinsi": label}
+    row.update(means.to_dict())
+    return pd.DataFrame([row])
 
 
 # --------------------------------------------------------------------------------------
@@ -375,6 +393,15 @@ elif page == "☣️ Limbah B3 per Sektor":
 elif page == "📦 Timbulan Sampah Provinsi":
     st.title("📦 Timbulan & Pengelolaan Sampah per Provinsi")
 
+    st.subheader("🇮🇩 Angka Nasional (Rata-rata Semua Provinsi)")
+    n1, n2, n3, n4 = st.columns(4)
+    n1.metric("Timbulan Sampah Tahunan", f"{df_234['Timbulan Sampah Tahunan (ton/tahun)'].mean():,.0f} ton")
+    n2.metric("Pengurangan Sampah", f"{df_234['Pengurangan Sampah (%)'].mean():,.1f} %")
+    n3.metric("Penanganan Sampah", f"{df_234['Penanganan Sampah (%)'].mean():,.1f} %")
+    n4.metric("Sampah Terkelola", f"{df_234['Sampah Terkelola (%)'].mean():,.1f} %")
+    st.caption("Dihitung dari rata-rata seluruh 38 provinsi (bukan dari total nasional).")
+    st.divider()
+
     colf1, colf2 = st.columns([2, 1])
     with colf1:
         provinsi_pilihan = st.multiselect(
@@ -400,6 +427,11 @@ elif page == "📦 Timbulan Sampah Provinsi":
     )
     fig.update_traces(texttemplate="%{text:,.1f}", textposition="outside")
     fig.update_layout(height=max(420, 24 * len(dff_sorted)), coloraxis_showscale=False)
+    nasional_mean = df_234[sort_by].mean()
+    fig.add_vline(
+        x=nasional_mean, line_dash="dash", line_color="#d62728",
+        annotation_text=f"Rata-rata Nasional: {nasional_mean:,.1f}", annotation_position="top",
+    )
     st.plotly_chart(fig, use_container_width=True)
     colA, colB = st.columns(2)
     with colA:
@@ -431,12 +463,28 @@ elif page == "🧩 Komposisi Sampah":
     st.title("🧩 Komposisi Jenis Sampah per Provinsi")
     kategori = [c for c in df_235.columns if c != "Provinsi"]
 
+    st.subheader("🇮🇩 Angka Nasional per Jenis Sampah (Rata-rata Semua Provinsi)")
+    nasional_235 = df_235[kategori].mean(numeric_only=True).round(2)
+    st.dataframe(
+        nasional_235.rename("Rata-rata Nasional (%)").to_frame().T,
+        use_container_width=True, hide_index=True,
+    )
+    df_download_button(
+        nasional_235.rename("Rata-rata Nasional (%)").reset_index().rename(columns={"index": "Jenis Sampah"}),
+        "Unduh Angka Nasional (CSV)", "angka_nasional_komposisi_sampah.csv", "dl_235_nasional_csv",
+    )
+    st.divider()
+
     tab1, tab2 = st.tabs(["🥧 Satu Provinsi (Detail)", "📊 Perbandingan Antar Provinsi"])
 
     with tab1:
-        prov = st.selectbox("Pilih provinsi", df_235["Provinsi"].tolist(), key="prov_235_single")
-        row = df_235[df_235["Provinsi"] == prov].iloc[0]
-        data = row[kategori].astype(float)
+        opsi_provinsi = [NASIONAL_LABEL] + df_235["Provinsi"].tolist()
+        prov = st.selectbox("Pilih provinsi", opsi_provinsi, key="prov_235_single")
+        if prov == NASIONAL_LABEL:
+            data = nasional_235
+        else:
+            row = df_235[df_235["Provinsi"] == prov].iloc[0]
+            data = row[kategori].astype(float)
         fig = px.pie(
             names=data.index, values=data.values, hole=0.4,
             template=TEMPLATE, color_discrete_sequence=PALETTE,
@@ -452,9 +500,12 @@ elif page == "🧩 Komposisi Sampah":
             default=df_235["Provinsi"].tolist()[:8],
         )
         kategori_pilihan = st.multiselect("Pilih jenis sampah", kategori, default=kategori)
+        sertakan_nasional = st.checkbox("Sertakan Rata-rata Nasional sebagai pembanding", value=True, key="nasional_235_tab2")
 
         if provinsi_pilihan and kategori_pilihan:
             dff = df_235[df_235["Provinsi"].isin(provinsi_pilihan)]
+            if sertakan_nasional:
+                dff = pd.concat([dff, national_row(df_235, kategori)], ignore_index=True)
             melted = dff.melt(id_vars="Provinsi", value_vars=kategori_pilihan, var_name="Jenis Sampah", value_name="Persentase")
             fig2 = px.bar(
                 melted, x="Persentase", y="Provinsi", color="Jenis Sampah",
@@ -482,12 +533,28 @@ elif page == "🏷️ Sumber Timbulan Sampah":
     st.title("🏷️ Sumber Timbulan Sampah per Provinsi")
     kategori = [c for c in df_236.columns if c != "Provinsi"]
 
+    st.subheader("🇮🇩 Angka Nasional per Sumber Sampah (Rata-rata Semua Provinsi)")
+    nasional_236 = df_236[kategori].mean(numeric_only=True).round(2)
+    st.dataframe(
+        nasional_236.rename("Rata-rata Nasional").to_frame().T,
+        use_container_width=True, hide_index=True,
+    )
+    df_download_button(
+        nasional_236.rename("Rata-rata Nasional").reset_index().rename(columns={"index": "Sumber"}),
+        "Unduh Angka Nasional (CSV)", "angka_nasional_sumber_sampah.csv", "dl_236_nasional_csv",
+    )
+    st.divider()
+
     tab1, tab2 = st.tabs(["🥧 Satu Provinsi (Detail)", "📊 Perbandingan Antar Provinsi"])
 
     with tab1:
-        prov = st.selectbox("Pilih provinsi", df_236["Provinsi"].tolist(), key="prov_236_single")
-        row = df_236[df_236["Provinsi"] == prov].iloc[0]
-        data = row[kategori].astype(float)
+        opsi_provinsi = [NASIONAL_LABEL] + df_236["Provinsi"].tolist()
+        prov = st.selectbox("Pilih provinsi", opsi_provinsi, key="prov_236_single")
+        if prov == NASIONAL_LABEL:
+            data = nasional_236
+        else:
+            row = df_236[df_236["Provinsi"] == prov].iloc[0]
+            data = row[kategori].astype(float)
         fig = px.bar(
             x=data.values, y=data.index, orientation="h", template=TEMPLATE,
             color=data.index, color_discrete_sequence=PALETTE,
@@ -503,6 +570,7 @@ elif page == "🏷️ Sumber Timbulan Sampah":
             default=df_236["Provinsi"].tolist()[:8], key="prov_236_multi",
         )
         normalisasi = st.checkbox("Tampilkan sebagai proporsi 100% (dinormalisasi)", value=True)
+        sertakan_nasional = st.checkbox("Sertakan Rata-rata Nasional sebagai pembanding", value=True, key="nasional_236_tab2")
 
         if provinsi_pilihan:
             dff = df_236[df_236["Provinsi"].isin(provinsi_pilihan)].copy()
@@ -510,6 +578,13 @@ elif page == "🏷️ Sumber Timbulan Sampah":
                 totals = dff[kategori].sum(axis=1)
                 for c in kategori:
                     dff[c] = dff[c] / totals * 100
+            if sertakan_nasional:
+                nas_df = national_row(df_236, kategori)
+                if normalisasi:
+                    tot_nas = nas_df[kategori].sum(axis=1)
+                    for c in kategori:
+                        nas_df[c] = nas_df[c] / tot_nas * 100
+                dff = pd.concat([dff, nas_df], ignore_index=True)
             melted = dff.melt(id_vars="Provinsi", value_vars=kategori, var_name="Sumber", value_name="Nilai")
             fig2 = px.bar(
                 melted, x="Nilai", y="Provinsi", color="Sumber", orientation="h",
@@ -549,7 +624,14 @@ elif page == "⚖️ Perbandingan Antar Provinsi":
         st.warning("Pilih minimal dua provinsi untuk perbandingan.")
         st.stop()
 
+    sertakan_nasional_cmp = st.checkbox("Sertakan Rata-rata Nasional dalam perbandingan", value=True, key="nasional_cmp")
+
     merged = df_234[df_234["Provinsi"].isin(provinsi_pilihan)].copy()
+    if sertakan_nasional_cmp:
+        merged = pd.concat(
+            [merged, national_row(df_234, [c for c in df_234.columns if c != "Provinsi"])],
+            ignore_index=True,
+        )
     st.subheader("Indikator Utama")
     fig = go.Figure()
     metrics = ["Pengurangan Sampah (%)", "Penanganan Sampah (%)", "Sampah Terkelola (%)"]
@@ -567,6 +649,8 @@ elif page == "⚖️ Perbandingan Antar Provinsi":
     st.subheader("Komposisi Sampah — Perbandingan")
     kat5 = [c for c in df_235.columns if c != "Provinsi"]
     dff5 = df_235[df_235["Provinsi"].isin(provinsi_pilihan)]
+    if sertakan_nasional_cmp:
+        dff5 = pd.concat([dff5, national_row(df_235, kat5)], ignore_index=True)
     melted5 = dff5.melt(id_vars="Provinsi", value_vars=kat5, var_name="Jenis Sampah", value_name="Persentase")
     fig2 = px.bar(
         melted5, x="Provinsi", y="Persentase", color="Jenis Sampah",
@@ -583,6 +667,12 @@ elif page == "⚖️ Perbandingan Antar Provinsi":
     totals6 = dff6[kat6].sum(axis=1)
     for c in kat6:
         dff6[c] = dff6[c] / totals6 * 100
+    if sertakan_nasional_cmp:
+        nas6 = national_row(df_236, kat6)
+        tot_nas6 = nas6[kat6].sum(axis=1)
+        for c in kat6:
+            nas6[c] = nas6[c] / tot_nas6 * 100
+        dff6 = pd.concat([dff6, nas6], ignore_index=True)
     melted6 = dff6.melt(id_vars="Provinsi", value_vars=kat6, var_name="Sumber", value_name="Persentase")
     fig3 = px.bar(
         melted6, x="Provinsi", y="Persentase", color="Sumber",
