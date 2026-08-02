@@ -535,14 +535,39 @@ elif page == "🧩 Komposisi Sampah":
 
     st.subheader("🇮🇩 Angka Nasional per Jenis Sampah (Rata-rata Semua Provinsi)")
     nasional_235 = df_235[kategori].mean(numeric_only=True).round(2)
-    st.dataframe(
-        nasional_235.rename("Rata-rata Nasional (%)").to_frame().T,
-        use_container_width=True, hide_index=True,
-    )
-    df_download_button(
-        nasional_235.rename("Rata-rata Nasional (%)").reset_index().rename(columns={"index": "Jenis Sampah"}),
-        "Unduh Angka Nasional (CSV)", "angka_nasional_komposisi_sampah.csv", "dl_235_nasional_csv",
-    )
+    nasional_235_sorted = nasional_235.sort_values()
+
+    colN1, colN2 = st.columns([1, 1.2])
+    with colN1:
+        fig_nas_pie235 = px.pie(
+            names=nasional_235.index, values=nasional_235.values, hole=0.45,
+            template=TEMPLATE, color_discrete_sequence=PALETTE,
+            title="Proporsi Rata-rata Nasional",
+        )
+        fig_nas_pie235.update_traces(textinfo="percent+label", textposition="outside")
+        fig_nas_pie235.update_layout(height=420, showlegend=False, margin=dict(t=60, b=10, l=10, r=10))
+        st.plotly_chart(fig_nas_pie235, use_container_width=True)
+    with colN2:
+        fig_nas_bar235 = px.bar(
+            x=nasional_235_sorted.values, y=nasional_235_sorted.index, orientation="h",
+            template=TEMPLATE, color=nasional_235_sorted.values, color_continuous_scale="Greens",
+            text=nasional_235_sorted.values, labels={"x": "Rata-rata Nasional (%)", "y": ""},
+            title="Peringkat Rata-rata Nasional",
+        )
+        fig_nas_bar235.update_traces(texttemplate="%{text:.2f}%", textposition="outside")
+        fig_nas_bar235.update_layout(height=420, coloraxis_showscale=False, margin=dict(t=60, b=10, l=10, r=10))
+        st.plotly_chart(fig_nas_bar235, use_container_width=True)
+
+    colD1, colD2, colD3 = st.columns(3)
+    with colD1:
+        fig_download_button(fig_nas_pie235, "nasional_komposisi_pie.png", "dl_235_nas_pie")
+    with colD2:
+        fig_download_button(fig_nas_bar235, "nasional_komposisi_bar.png", "dl_235_nas_bar")
+    with colD3:
+        df_download_button(
+            nasional_235.rename("Rata-rata Nasional (%)").reset_index().rename(columns={"index": "Jenis Sampah"}),
+            "Unduh Angka Nasional (CSV)", "angka_nasional_komposisi_sampah.csv", "dl_235_nasional_csv",
+        )
     st.divider()
 
     tab1, tab2 = st.tabs(["🥧 Satu Provinsi (Detail)", "📊 Perbandingan Antar Provinsi"])
@@ -605,14 +630,43 @@ elif page == "🏷️ Sumber Timbulan Sampah":
 
     st.subheader("🇮🇩 Angka Nasional per Sumber Sampah (Rata-rata Semua Provinsi)")
     nasional_236 = df_236[kategori].mean(numeric_only=True).round(2)
-    st.dataframe(
-        nasional_236.rename("Rata-rata Nasional").to_frame().T,
-        use_container_width=True, hide_index=True,
+    nasional_236_sorted = nasional_236.sort_values()
+
+    colN1, colN2 = st.columns([1, 1.2])
+    with colN1:
+        fig_nas_pie236 = px.pie(
+            names=nasional_236.index, values=nasional_236.values, hole=0.45,
+            template=TEMPLATE, color_discrete_sequence=PALETTE,
+            title="Proporsi Rata-rata Nasional",
+        )
+        fig_nas_pie236.update_traces(textinfo="percent+label", textposition="outside")
+        fig_nas_pie236.update_layout(height=420, showlegend=False, margin=dict(t=60, b=10, l=10, r=10))
+        st.plotly_chart(fig_nas_pie236, use_container_width=True)
+    with colN2:
+        fig_nas_bar236 = px.bar(
+            x=nasional_236_sorted.values, y=nasional_236_sorted.index, orientation="h",
+            template=TEMPLATE, color=nasional_236_sorted.values, color_continuous_scale="Oranges",
+            text=nasional_236_sorted.values, labels={"x": "Rata-rata Nasional", "y": ""},
+            title="Peringkat Rata-rata Nasional",
+        )
+        fig_nas_bar236.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+        fig_nas_bar236.update_layout(height=420, coloraxis_showscale=False, margin=dict(t=60, b=10, l=10, r=10))
+        st.plotly_chart(fig_nas_bar236, use_container_width=True)
+    st.caption(
+        "Catatan: 'Rumah Tangga' bernilai jauh lebih besar dari sumber lain karena satuan datanya "
+        "mencakup skala timbulan yang lebih luas dibanding sumber lain seperti Perkantoran atau Pasar."
     )
-    df_download_button(
-        nasional_236.rename("Rata-rata Nasional").reset_index().rename(columns={"index": "Sumber"}),
-        "Unduh Angka Nasional (CSV)", "angka_nasional_sumber_sampah.csv", "dl_236_nasional_csv",
-    )
+
+    colD1, colD2, colD3 = st.columns(3)
+    with colD1:
+        fig_download_button(fig_nas_pie236, "nasional_sumber_pie.png", "dl_236_nas_pie")
+    with colD2:
+        fig_download_button(fig_nas_bar236, "nasional_sumber_bar.png", "dl_236_nas_bar")
+    with colD3:
+        df_download_button(
+            nasional_236.rename("Rata-rata Nasional").reset_index().rename(columns={"index": "Sumber"}),
+            "Unduh Angka Nasional (CSV)", "angka_nasional_sumber_sampah.csv", "dl_236_nasional_csv",
+        )
     st.divider()
 
     tab1, tab2 = st.tabs(["🥧 Satu Provinsi (Detail)", "📊 Perbandingan Antar Provinsi"])
